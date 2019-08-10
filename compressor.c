@@ -32,14 +32,10 @@ a  -    11110
 EOF   - 11111
  */
 
-#include "cstdio"
-#include "string"
-#include "cstdlib"
-#include "cstdio"
-#include "cstring"
-#include <iostream>
-#include <fstream>
-#include <vector>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 
 #define BYTE unsigned char
 #define BIT_ZERO                        1
@@ -56,13 +52,22 @@ EOF   - 11111
 #define INPUT_FILE_INDEX                2
 #define OUTPUT_FILE_INDEX               3
 
+#define TRUE 1
+#define FALSE 0
+#define BOOL char
+
 BYTE compressCharacter(char chr); 
+
 char decompressByte(BYTE byte);
-void readFile(const std::string& fileName, std::vector<BYTE>& fileContent);
-void writeToFile(const std::string& fileName, std::vector<BYTE>& fileContent);
-std::vector<BYTE> compressText(std::vector<BYTE>& text);
-std::vector<BYTE> decompressText(std::vector<BYTE>& arr);
+char* readFile(const char * fileName, int* error, size_t* fileSize);
+
+
 void usage(void);
+void writeToFile(const char* fileName, char* fileContent, size_t length);
+
+size_t compressText(char* text, size_t textLength, char** compressedText);
+size_t decompressText(char* arr, size_t arrLength, char** decompressedText);
+
 
 int main(int argc, char** argv)
 {
@@ -71,18 +76,19 @@ int main(int argc, char** argv)
         usage();
         exit(1);
     }
-    std::string c = argv[OPTION_INDEX];
+    char* text = NULL;
+    int* error;
+    size_t length;
+    text = readFile(argv[INPUT_FILE_INDEX], error, &length);
     if(strcmp(argv[OPTION_INDEX], "-c") == 0 || strcmp(argv[OPTION_INDEX], "--compress") == 0){
-        std::vector<BYTE> textVector;
-        readFile(argv[INPUT_FILE_INDEX], textVector);
-        std::vector<BYTE> compressedTextVector = compressText(textVector);
-        writeToFile(argv[OUTPUT_FILE_INDEX], compressedTextVector);
+        char* compressedText = NULL;
+        size_t compressedLength = compressText(text,length, &compressedText);
+        writeToFile(argv[OUTPUT_FILE_INDEX], compressedText,  compressedLength);
     }
     else if(strcmp(argv[OPTION_INDEX], "-d") == 0 || strcmp(argv[OPTION_INDEX], "--decompress") == 0){
-        std::vector<BYTE> textVector;
-        readFile(argv[INPUT_FILE_INDEX], textVector);
-        std::vector<BYTE> decompressedTextVector = decompressText(textVector);
-        writeToFile(argv[OUTPUT_FILE_INDEX], decompressedTextVector);
+        char* decompressedText = NULL;
+        size_t decompressedLength = decompressText(text, length, &decompressedText);
+        writeToFile(argv[OUTPUT_FILE_INDEX], decompressedText,  decompressedLength);
     }
     else
     {
@@ -99,211 +105,248 @@ void usage(void)
     printf("OPTIONS:\n\t(-c, --compress): compresses file and outputs into FILE\n");
     printf("\t(-d, --decompress): decompresses file and outputs into FILE\n\n\n");
 }
-void writeToFile(const std::string& fileName, std::vector<BYTE>& fileContent)
+void writeToFile(const char* fileName, char* fileContent, size_t length)
 {
-    
-    char c;
-    std::ofstream outputFile;
-    outputFile.open(fileName.c_str());
-    if(!outputFile)
+    FILE* fp = fopen(fileName, "w+");
+    if(!fp)
     {
-        std::cerr << "Unable to open file " << fileName << std::endl;
+        fprintf(stderr, "Unable to open file %s\n", fileName);
         exit(1);   // call system to stop
     }
-    for(int i = 0;i < fileContent.size();++i)
+    for(int i = 0;i < length;++i)
     {
-        outputFile << fileContent[i];
+        fputc(fileContent[i],fp);
     }
-    outputFile.close();
+    fclose(fp);
 }
-std::vector<BYTE> decompressText(std::vector<BYTE>& arr)
+size_t decompressText(char* arr, size_t arrLength, char** decompressedText)
 {
     BYTE byte = '\0', byte2 = '\0';
-    std::vector<BYTE> string;
-    int size = arr.size();
-    for(int i = 0;i<size;++i)
+    size_t j = 0;
+    *decompressedText = (char*)malloc(1024);
+    for(size_t i = 0;i<arrLength;++i)
     {
         byte = arr[i] >> 3;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        j++;
+        //string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 5);
         byte >>= 3;
-        if(i+1 < arr.size()){
+        if(i+1 < arrLength){
             ++i;
         }
         else{
-            return string;
+            return j;
         }
         byte2 = arr[i] >> 6;
         byte = byte | byte2;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        j++;
+        // string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 2);
         byte >>= 3;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        j++;
+        //string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 7);
         byte >>= 3;
-        if(i+1 < arr.size()){
+        if(i+1 < arrLength){
             ++i;
         }
         else{
-            return string;
+            return j;
         }
         byte2 = (arr[i] >> 4);
         byte = byte | byte2;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        ++j;
+        //string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 4);
         byte >>= 3;
-        if(i+1 < arr.size()){
+        if(i+1 < arrLength){
             ++i;
         }
         else{
-            return string;
+            return j;
         }
         byte2 = arr[i] >> 7;
         byte = byte | byte2;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        ++j;
+        //string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 1);
         byte >>= 3;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        ++j;
+        //string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 6);
         byte >>= 3;
-        if(i+1 < arr.size()){
+        if(i+1 < arrLength){
             ++i;
         }
         else{
-            return string;
+            return j;
         }
         byte2 = arr[i] >> 5;
         byte = byte | byte2;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        ++j;
+        //string.push_back(decompressByte(byte));
 
         byte = (arr[i] << 3);
         byte >>=3;
-        string.push_back(decompressByte(byte));
+        *decompressedText[j] = decompressByte(byte);
+        ++j;
+        //string.push_back(decompressByte(byte));
     }
-    return string;
+    
+    return j;
 }
-std::vector<BYTE> compressText(std::vector<BYTE>& text)
+size_t compressText(char* text, size_t textLength, char** compressedText)
 {
-    size_t length = text.size();
-    char compressedChar;
-    std::vector<BYTE> compressedText;
-    compressedText.resize((size_t)(length*(5/8)+1)); // from 8 bits to 5 bits a character.
-    bool firstTime = true; 
-    for(int i = 0,j = 0;i<length;++i)
+    size_t length = textLength;
+    *compressedText = (char*)malloc(1024);
+    char compressedChar = '\0';
+    //compressedText.resize((size_t)(length*(5/8)+1)); // from 8 bits to 5 bits a character.
+    BOOL firstTime = TRUE; 
+    size_t i = 0, j =0;
+    for(i = 0,j = 0;i<length;++i)
     {
         if(firstTime){
-            firstTime = false;
+            firstTime = FALSE;
         }
         else{
-            compressedText.push_back('\0');
+            if(i+1<length)
+                *compressedText[i+1] = '\0';
         }
         
         compressedChar = compressCharacter(text[j]);
-        compressedText[i] = compressedChar << 3;
+        *compressedText[i] = compressedChar << 3;
         if(j+1< length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
         
-        compressedText[i] |= compressedChar >> 2;
-        compressedText.push_back('\0');
+        *compressedText[i] |= compressedChar >> 2;
         ++i;
-        compressedText[i] |= compressedChar << 6;
+        *compressedText[i] = '\0';
+        *compressedText[i] |= compressedChar << 6;
 
         if(j+1 < length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
 
-        compressedText[i] |= compressedChar << 1;
+        *compressedText[i] |= compressedChar << 1;
 
         if(j+1 < length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
 
-        compressedText[i] |= compressedChar >> 4;
-        compressedText.push_back('\0');
+        *compressedText[i] |= compressedChar >> 4;
         ++i;
-        compressedText[i] |= compressedChar << 4;
+        *compressedText[i] = '\0';
+        *compressedText[i] |= compressedChar << 4;
 
         if(j+1 < length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
         
-        compressedText[i] |= compressedChar >> 1;
-        compressedText.push_back('\0');
+        *compressedText[i] |= compressedChar >> 1;
         ++i;
-        compressedText[i] |= compressedChar << 7;
+        *compressedText[i] = '\0';
+        *compressedText[i] |= compressedChar << 7;
 
         if(j+1 < length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
         
-        compressedText[i] |= compressedChar << 2;
+        *compressedText[i] |= compressedChar << 2;
 
         if(j+1 < length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
 
-        compressedText[i] |= compressedChar >> 3;
+        *compressedText[i] |= compressedChar >> 3;
 
-        compressedText.push_back('\0');
         ++i;
-
-        compressedText[i] |= compressedChar << 5;
+        *compressedText[i] = '\0';
+        *compressedText[i] |= compressedChar << 5;
 
         if(j+1 < length){
             ++j;
             compressedChar = compressCharacter(text[j]);
         }
         else
-            return compressedText;
+            return i;
 
-        compressedText[i] |= compressedChar;
+        *compressedText[i] |= compressedChar;
         if(j+1 < length){
             ++j;
         }
         else
-            return compressedText;
+            return i;
     }
-    return compressedText;
+    return i;
 }
-void readFile(const std::string& fileName, std::vector<BYTE>& fileContent)
-{
-    char c;
-    std::ifstream inputFile;
-    inputFile.open(fileName.c_str());
-    
-    if(!inputFile)
-    {
-        std::cerr << "Unable to open file " << fileName << std::endl;
-        exit(1);   // call system to stop
+
+char* readFile(const char * fileName, int* error, size_t* fileSize) {
+    char * buffer = '\0';
+    size_t length = 0;
+    FILE* f = fopen(fileName, "rb");
+    size_t readLength = 0;
+
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        length = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        buffer = (char*)malloc(length + 1);
+
+        if (length) {
+            readLength = fread(buffer, 1, length, f);
+
+            if (length != readLength) {
+                 *error = 1;
+
+                 return NULL;
+            }
+        }
+
+        fclose(f);
+
+        *error = 1;
+        buffer[length] = '\0';
+        *fileSize = length;
     }
-    while(inputFile.get(c)){
-        fileContent.push_back(c);
+    else {
+        *error = 1;
+
+        return NULL;
     }
+    return buffer;
 }
 BYTE compressCharacter(char chr)
 {
